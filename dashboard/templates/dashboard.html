@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-card {
+            flex: 1;
+            min-width: 200px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .chart-container h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.3em;
+        }
+        
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #666;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .last-update {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Real-time Analytics Dashboard</h1>
+        <div class="subtitle">
+            <span class="status-indicator"></span>
+            Live streaming from Apache Flink
+        </div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat-card">
+            <h3>Total Revenue</h3>
+            <div class="value" id="total-revenue">$0</div>
+        </div>
+        <div class="stat-card">
+            <h3>Active Apps</h3>
+            <div class="value" id="active-apps">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>Videos Watched</h3>
+            <div class="value" id="videos-watched">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>Unique Users</h3>
+            <div class="value" id="unique-users">0</div>
+        </div>
+    </div>
+    
+    <div class="dashboard-grid">
+        <div class="chart-container">
+            <h2>💰 Revenue by Category</h2>
+            <canvas id="revenueChart"></canvas>
+        </div>
+        
+        <div class="chart-container">
+            <h2>📱 Top Apps by Usage</h2>
+            <canvas id="appUsageChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <h2>🎬 Video Analytics</h2>
+        <table id="videoTable">
+            <thead>
+                <tr>
+                    <th>Video Title</th>
+                    <th>Category</th>
+                    <th>Views</th>
+                    <th>Unique Viewers</th>
+                    <th>Play Count</th>
+                    <th>Avg Buffering (ms)</th>
+                </tr>
+            </thead>
+            <tbody id="videoTableBody">
+                <tr><td colspan="6" style="text-align: center;">Loading data...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="last-update">
+        Last updated: <span id="last-update">--:--:--</span>
+    </div>
+
+    <script>
+        // Chart configurations
+        const revenueChart = new Chart(document.getElementById('revenueChart'), {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Revenue ($)',
+                    data: [],
+                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+        
+        const appUsageChart = new Chart(document.getElementById('appUsageChart'), {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: [
+                        '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                        '#43e97b', '#fa709a', '#fee140', '#30cfd0'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true
+            }
+        });
+        
+        // Update functions
+        async function updateRevenue() {
+            const response = await fetch('/api/revenue');
+            const data = await response.json();
+            
+            if (data.length > 0) {
+                const categoryMap = {};
+                data.forEach(item => {
+                    if (!categoryMap[item.product_category]) {
+                        categoryMap[item.product_category] = 0;
+                    }
+                    categoryMap[item.product_category] += item.total_revenue;
+                });
+                
+                revenueChart.data.labels = Object.keys(categoryMap);
+                revenueChart.data.datasets[0].data = Object.values(categoryMap);
+                revenueChart.update();
+                
+                const totalRevenue = Object.values(categoryMap).reduce((a, b) => a + b, 0);
+                document.getElementById('total-revenue').textContent = '$' + totalRevenue.toFixed(2);
+            }
+        }
+        
+        async function updateAppUsage() {
+            const response = await fetch('/api/app-usage');
+            const data = await response.json();
+            
+            if (data.length > 0) {
+                const appMap = {};
+                data.forEach(item => {
+                    if (!appMap[item.app_name]) {
+                        appMap[item.app_name] = 0;
+                    }
+                    appMap[item.app_name] += item.event_count;
+                });
+                
+                const sortedApps = Object.entries(appMap)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 8);
+                
+                appUsageChart.data.labels = sortedApps.map(a => a[0]);
+                appUsageChart.data.datasets[0].data = sortedApps.map(a => a[1]);
+                appUsageChart.update();
+                
+                document.getElementById('active-apps').textContent = Object.keys(appMap).length;
+            }
+        }
+        
+        async function updateVideo() {
+            const response = await fetch('/api/video');
+            const data = await response.json();
+            
+            if (data.length > 0) {
+                const tbody = document.getElementById('videoTableBody');
+                tbody.innerHTML = '';
+                
+                const latest = data.slice(-10).reverse();
+                latest.forEach(item => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${item.video_title}</td>
+                        <td>${item.video_category}</td>
+                        <td>${item.total_events}</td>
+                        <td>${item.unique_viewers}</td>
+                        <td>${item.play_count}</td>
+                        <td>${item.avg_buffering_ms.toFixed(1)}</td>
+                    `;
+                });
+                
+                const totalViews = data.reduce((sum, item) => sum + item.total_events, 0);
+                document.getElementById('videos-watched').textContent = totalViews;
+            }
+        }
+        
+        async function updateStats() {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+            document.getElementById('last-update').textContent = data.last_update;
+        }
+        
+        // Update all data
+        async function updateAll() {
+            await Promise.all([
+                updateRevenue(),
+                updateAppUsage(),
+                updateVideo(),
+                updateStats()
+            ]);
+        }
+        
+        // Initial load
+        updateAll();
+        
+        // Refresh every 2 seconds
+        setInterval(updateAll, 2000);
+    </script>
+</body>
+</html>
