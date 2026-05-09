@@ -1,369 +1,253 @@
-# High-Throughput Streaming Analytics Platform
+# Real-Time Streaming Analytics Platform
 
-Real-time analytics platform processing 100K events/sec using Apache Flink, Kafka, and Python.
+A high-throughput streaming analytics platform that processes **100,000 events/second** from simulated mobile devices using Apache Flink, Kafka, and a lakehouse architecture with Apache Iceberg.
 
-## Overview
-
-This project demonstrates a production-ready streaming analytics platform that:
-- Generates 100,000 events per second from 10M simulated devices
-- Processes events in real-time using Apache Flink
-- Provides live analytics dashboard
-- Handles 9 applications across Shopping, Video Streaming, and Social Media categories
+![Architecture](https://img.shields.io/badge/Architecture-Streaming-blue)
+![Throughput](https://img.shields.io/badge/Throughput-100K_events%2Fsec-green)
+![Stack](https://img.shields.io/badge/Stack-Flink%20|%20Kafka%20|%20Iceberg%20|%20Trino-orange)
 
 ## Architecture
 
 ```
-Event Simulator (100K/sec)
-    ↓
-Kafka Topics (10 partitions each)
-    ↓
-Flink Jobs (3 analytics pipelines)
-    ↓
-Output Topics
-    ↓
-Real-time Dashboard
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  Event Simulator (8 processes × 12.5K events/sec = 100K/sec)        │
+│       ↓                                                              │
+│  Apache Kafka (3 input topics, 10 partitions each)                  │
+│       ↓                                                              │
+│  ┌──────────────────────┐    ┌────────────────────────────────┐     │
+│  │ Apache Flink          │    │ Lakehouse (Iceberg + MinIO)     │     │
+│  │ 3 analytics jobs      │    │ Long-term storage + SQL queries │     │
+│  │ 10-sec tumbling windows│    │ Queryable via Trino             │     │
+│  └──────────┬───────────┘    └────────────────────────────────┘     │
+│             ↓                                                        │
+│  Kafka Output Topics → Flask Dashboard (real-time charts)           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Performance
+## Features
 
-- **Throughput**: 100,000 events/second sustained
-- **Latency**: 10-second tumbling windows
-- **Scalability**: 8 parallel processes, 4 Flink TaskManagers
-- **Stability**: ±0.1% variance over extended periods
+- **High-throughput event generation** — 100K events/sec using multi-process Python (bypasses GIL)
+- **Real-time stream processing** — Apache Flink with 10-second tumbling windows
+- **3 analytics pipelines** — Purchase revenue, app usage, video engagement
+- **Live dashboard** — Flask + Chart.js with 2-second auto-refresh
+- **Lakehouse storage** — Apache Iceberg tables on MinIO (S3-compatible)
+- **SQL analytics** — Query historical data with Trino
+- **Monitoring & alerting** — System health monitoring with configurable alerts
+
+## Tech Stack
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Message Broker | Apache Kafka 7.5 | Event streaming with 10 partitions/topic |
+| Stream Processing | Apache Flink 1.18 | Real-time aggregations |
+| Event Generator | Python + multiprocessing | 100K events/sec simulation |
+| Serialization | orjson | 10x faster than standard json |
+| Dashboard | Flask + Chart.js | Real-time visualization |
+| Object Storage | MinIO | S3-compatible storage for Iceberg |
+| Table Format | Apache Iceberg | ACID transactions, time travel |
+| Query Engine | Trino 435 | SQL on Iceberg tables |
+| Catalog | Hive Metastore | Table metadata management |
+| Orchestration | Docker Compose | Local development environment |
+
+## Applications Simulated
+
+### Shopping
+- Amazon, Flipkart, Myntra
+
+### Video Streaming
+- Amazon Prime Video, Netflix, JioHotstar
+
+### Social Media
+- Instagram, TikTok, YouTube
+
+## Event Types
+
+| Type | Distribution | Example |
+|------|-------------|---------|
+| App Usage | 50% | User opened Netflix, session duration 1800s |
+| Video Playback | 35% | Sacred Games playing at 1080p, 200ms buffering |
+| Purchases | 15% | iPhone 15 Pro, $1299.99, credit card |
 
 ## Quick Start
 
 ### Prerequisites
-- Docker Desktop
-- Python 3.10+
-- 8GB+ RAM
-- 8+ CPU cores (recommended)
 
-### 1. Start Services
+- Docker Desktop (4GB+ RAM allocated)
+- Python 3.10+
+- `pip install orjson kafka-python flask psutil requests`
+
+### 1. Start Infrastructure
+
 ```bash
 docker-compose up -d
-sleep 30  # Wait for initialization
 ```
 
 ### 2. Create Kafka Topics
+
 ```bash
-for topic in device-app-events device-video-events device-purchase-events revenue-stats app-usage-stats video-stats; do
+for topic in device-app-events device-video-events device-purchase-events \
+             revenue-stats app-usage-stats video-stats; do
   docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
     --create --topic $topic --partitions 10 --replication-factor 1 --if-not-exists
 done
 ```
 
-### 3. Submit Flink Jobs
+### 3. Download Flink Kafka Connector
+
+```bash
+# Download to lib/ directory
+curl -o lib/flink-sql-connector-kafka-3.0.2-1.18.jar \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.0.2-1.18/flink-sql-connector-kafka-3.0.2-1.18.jar
+```
+
+### 4. Submit Flink Jobs
+
 ```bash
 ./submit_to_flink.sh cluster_jobs/purchase_analytics.py
 ./submit_to_flink.sh cluster_jobs/app_usage_analytics.py
 ./submit_to_flink.sh cluster_jobs/video_analytics.py
 ```
 
-### 4. Start Event Simulator
+### 5. Start Event Simulator
+
 ```bash
-python3 simulator/device_event_generator_phase3.py
+python3 simulator/event_generator.py
 ```
 
-### 5. Start Dashboard (Optional)
+### 6. Start Dashboard
+
 ```bash
 python3 dashboard/app.py
 ```
 
-### 6. Start Monitoring (Optional)
-```bash
-# Monitoring dashboard
-python3 monitoring/monitoring_dashboard.py
+### 7. (Optional) Start Monitoring
 
-# Alerting system
-python3 monitoring/alerting.py
+```bash
+python3 monitoring/monitoring_dashboard.py
 ```
 
 ## Access Points
 
-- **Flink UI**: http://localhost:8081
-- **Kafka UI**: http://localhost:8080
-- **Analytics Dashboard**: http://localhost:5000
-- **Monitoring Dashboard**: http://localhost:5001
-
-## Applications
-
-### Shopping
-- Amazon
-- Flipkart
-- Myntra
-
-### Video Streaming/OTT
-- Amazon Prime Video
-- Netflix
-- JioHotstar
-
-### Social Media
-- Instagram
-- TikTok
-- YouTube
-
-## Event Types
-
-### App Usage Events (50%)
-- App opens, closes, backgrounding
-- Session tracking
-- Duration metrics
-
-### Video Events (35%)
-- Play, pause, stop, complete
-- Quality settings
-- Buffering metrics
-
-### Purchase Events (15%)
-- Product transactions
-- Payment methods
-- Revenue tracking
-
-## Analytics
-
-### Revenue Analytics
-- Transaction counts by category
-- Total revenue calculations
-- Unique buyer tracking
-
-### App Usage Analytics
-- Event counts per app
-- Unique user tracking
-- Total usage duration
-
-### Video Analytics
-- View counts per video
-- Unique viewer tracking
-- Play counts and buffering metrics
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Kafka UI | http://localhost:8080 | — |
+| Flink UI | http://localhost:8081 | — |
+| Dashboard | http://localhost:5000 | — |
+| Monitoring | http://localhost:5001 | — |
+| MinIO Console | http://localhost:9001 | admin / password123 |
+| Trino UI | http://localhost:8082 | — |
 
 ## Project Structure
 
 ```
 .
-├── cluster_jobs/              # Flink analytics jobs
-│   ├── purchase_analytics.py
-│   ├── app_usage_analytics.py
-│   └── video_analytics.py
-├── dashboard/                 # Real-time dashboard
-│   ├── app.py
-│   └── templates/
-│       └── dashboard.html
-├── simulator/                 # Event generator
-│   └── device_event_generator_phase3.py
-├── models/                    # Data models
-│   └── events.py
-├── lib/                       # Flink connectors
-│   └── flink-sql-connector-kafka-3.0.2-1.18.jar
-├── docker-compose.yml         # Service orchestration
-├── Dockerfile.flink           # Custom Flink image
-├── requirements.txt           # Python dependencies
-├── submit_to_flink.sh         # Job submission script
-├── QUICK_START.md            # Detailed guide
-└── PHASE3_RESULTS.md         # Performance analysis
+├── simulator/
+│   └── event_generator.py          # Multi-process event simulator (100K/sec)
+├── cluster_jobs/
+│   ├── purchase_analytics.py       # Revenue aggregation (Flink SQL)
+│   ├── app_usage_analytics.py      # App usage metrics (Flink SQL)
+│   └── video_analytics.py          # Video engagement metrics (Flink SQL)
+├── dashboard/
+│   ├── app.py                      # Flask backend (Kafka consumer)
+│   └── templates/dashboard.html    # Real-time charts (Chart.js)
+├── monitoring/
+│   ├── metrics_collector.py        # Kafka/Flink/system metrics
+│   ├── alerting.py                 # Alert manager (email/Slack/webhook)
+│   ├── monitoring_dashboard.py     # Monitoring web UI
+│   └── templates/monitoring.html   # Monitoring charts
+├── lakehouse/
+│   ├── conf/core-site.xml          # Hadoop S3A configuration
+│   └── trino/                      # Trino catalog & config
+├── models/
+│   └── events.py                   # Event dataclass definitions
+├── lib/                            # Flink connector JARs (not in git)
+├── docker-compose.yml              # All services orchestration
+├── Dockerfile.flink                # Flink + Python image
+├── Dockerfile.hive-metastore       # Hive Metastore + S3A support
+├── submit_to_flink.sh              # Job submission helper script
+└── requirements.txt                # Python dependencies
 ```
 
-## Technology Stack
+## Analytics Output
 
-- **Stream Processing**: Apache Flink 1.18
-- **Message Broker**: Apache Kafka 7.5
-- **Event Generation**: Python 3.10 with multiprocessing
-- **Serialization**: orjson (10x faster than standard json)
-- **Dashboard**: Flask + Chart.js
-- **Containerization**: Docker & Docker Compose
+### Purchase Analytics (every 10 seconds)
+```json
+{"product_category": "Electronics", "transaction_count": 4, "total_revenue": 2999.95, "unique_buyers": 3}
+```
 
-## Performance Optimization Journey
+### App Usage Analytics (every 10 seconds)
+```json
+{"app_name": "Netflix", "app_category": "Video Streaming", "event_count": 150, "unique_users": 89, "total_duration_seconds": 45000}
+```
 
-| Phase | Rate | Processes | Key Optimization |
-|-------|------|-----------|------------------|
-| Original | 23K/sec | 1 | Basic implementation |
-| Phase 1 | 47.5K/sec | 1 | orjson + caching |
-| Phase 2 | 90K/sec | 6 | Multi-process |
-| Phase 3 | 100K/sec | 8 | Optimized multi-process |
+### Video Analytics (every 10 seconds)
+```json
+{"video_id": "nf_001", "video_title": "Sacred Games", "total_events": 200, "unique_viewers": 120, "play_count": 95, "avg_buffering_ms": 275.0}
+```
 
-**Total Improvement**: 4.3x faster (334% gain)
+## Performance
 
-## Key Optimizations
+| Metric | Value |
+|--------|-------|
+| Event generation rate | 100,000 events/sec |
+| Flink processing latency | 10-second windows |
+| Kafka partitions | 10 per topic |
+| Flink parallelism | 6 per job |
+| TaskManagers | 4 (32 total slots) |
+| Simulator processes | 8 (bypasses Python GIL) |
 
-### Event Generation
-- Multi-process architecture (8 processes)
-- orjson for fast JSON serialization
-- Pre-cached device/user IDs (1000 each)
-- Event templates to reduce object creation
-- Optimized Kafka producer settings
+### Optimization Journey
 
-### Kafka Configuration
-- 10 partitions per topic
-- LZ4 compression
-- Optimized batch sizes (128KB)
-- Increased network/IO threads
-- No acknowledgments for maximum speed
+| Phase | Rate | Key Optimization |
+|-------|------|------------------|
+| Baseline | 23K/sec | Single process, standard json |
+| Phase 1 | 47.5K/sec | orjson + pre-cached IDs |
+| Phase 2 | 90K/sec | 6 parallel processes |
+| Phase 3 | 100K/sec | 8 processes, fine-tuned |
 
-### Flink Configuration
-- 4 TaskManagers with 8 slots each (32 total)
-- Parallelism of 6 per job
-- Processing-time windows (10 seconds)
-- Kafka source/sink connectors
+## Lakehouse (Iceberg + Trino)
+
+Query raw events with SQL after they're stored in the lakehouse:
+
+```sql
+-- Daily active users by app
+SELECT app_name, COUNT(DISTINCT user_id) as dau
+FROM iceberg.lakehouse.app_events
+WHERE event_date = CURRENT_DATE
+GROUP BY app_name;
+
+-- Revenue by category
+SELECT product_category, SUM(price * quantity) as revenue
+FROM iceberg.lakehouse.purchase_events
+GROUP BY product_category;
+
+-- Time travel - query data as it was 1 hour ago
+SELECT * FROM iceberg.lakehouse.purchase_events
+FOR TIMESTAMP AS OF (CURRENT_TIMESTAMP - INTERVAL '1' HOUR);
+```
 
 ## Monitoring
 
-### Critical Metrics
-
+The monitoring system tracks:
 - **System**: CPU, memory, disk usage
-- **Flink**: Job status, task slots, TaskManagers
-- **Kafka**: Topic health, consumer lag, partitions
+- **Flink**: Job status, backpressure, available slots
+- **Kafka**: Topic health, consumer lag
 
-### Monitoring Tools
+Alerts can be sent via console, email, Slack, or custom webhook.
 
-1. **Monitoring Dashboard** (http://localhost:5001)
-   - Real-time metrics visualization
-   - System resource charts
-   - Flink job status
-   - Alert history
-
-2. **Alerting System**
-   - Automated threshold monitoring
-   - Multiple notification channels (Console, Email, Slack, Webhook)
-   - 5-minute alert cooldown
-   - Configurable thresholds
-
-3. **Health Check API**
-   - Endpoint: http://localhost:5001/api/health
-   - Returns 200 (healthy) or 503 (unhealthy)
-   - Suitable for automated monitoring tools
-
-### Quick Start Monitoring
+## Stop Everything
 
 ```bash
-# Start monitoring dashboard
-python3 monitoring/monitoring_dashboard.py
-
-# Start alerting (console only)
-python3 monitoring/alerting.py
-
-# Start alerting with config
-python3 monitoring/alerting.py monitoring/alert_config.json
-```
-
-See [MONITORING_GUIDE.md](MONITORING_GUIDE.md) for complete documentation.
-
-## Management Commands
-
-### Check Services
-```bash
-docker ps
-docker-compose logs -f [service-name]
-```
-
-### View Flink Jobs
-```bash
-docker exec flink-jobmanager flink list
-```
-
-### View Kafka Messages
-```bash
-# Input topics
-docker exec kafka kafka-console-consumer --bootstrap-server localhost:9092 \
-  --topic device-app-events --max-messages 5
-
-# Output topics
-docker exec kafka kafka-console-consumer --bootstrap-server localhost:9092 \
-  --topic revenue-stats --max-messages 5
-```
-
-### Stop Everything
-```bash
-# Stop simulator and dashboard
-ps aux | grep -E "(device_event_generator|dashboard)" | grep -v grep | awk '{print $2}' | xargs kill
-
-# Stop Docker services
 docker-compose down
 ```
 
-## Monitoring
-
-### Simulator Metrics
-- Events/sec rate (current and average)
-- Total events processed
-- Per-process performance
-
-### Flink Metrics (UI)
-- Job status and uptime
-- Task parallelism
-- Checkpoint statistics
-- Backpressure indicators
-
-### Kafka Metrics (UI)
-- Topic throughput
-- Consumer lag
-- Partition distribution
-
-## Troubleshooting
-
-### Simulator Not Reaching Target Rate
-1. Check CPU usage: `top` or `htop`
-2. Verify Kafka broker health
-3. Reduce number of processes if needed
-4. Check network latency
-
-### Flink Jobs Not Processing
-1. Check Flink UI for errors
-2. View TaskManager logs
-3. Verify Kafka topics have messages
-4. Check available task slots
-
-### Dashboard Not Showing Data
-1. Verify Flink jobs are running
-2. Check output topics have messages
-3. Restart dashboard
-4. Check browser console for errors
-
-## Resource Requirements
-
-### Minimum
-- 4 CPU cores
-- 8GB RAM
-- 10GB disk space
-
-### Recommended
-- 8+ CPU cores
-- 16GB RAM
-- 20GB disk space
-- SSD storage
-
-## Future Enhancements
-
-1. **Scale to 150K+ events/sec**
-   - Increase to 10-12 processes
-   - Implement async I/O with aiokafka
-   - Add more Kafka brokers
-
-2. **Advanced Analytics**
-   - Machine learning predictions
-   - Anomaly detection
-   - User behavior analysis
-
-3. **Production Features**
-   - Exactly-once processing
-   - State management
-   - Alerting system
-   - Metrics export (Prometheus)
+To also remove stored data:
+```bash
+docker-compose down -v
+```
 
 ## License
 
-MIT License - See LICENSE file for details
-
-## Contributing
-
-Contributions welcome! Please open an issue or submit a pull request.
-
-## Documentation
-
-- [README](README.md) - Main project documentation
-- [Quick Start Guide](QUICK_START.md) - Detailed setup and usage
-- [Phase 3 Results](PHASE3_RESULTS.md) - Performance analysis and metrics
-- [Monitoring Guide](MONITORING_GUIDE.md) - Complete monitoring and alerting setup
-
-## Support
-
-For issues or questions, please open a GitHub issue.
+MIT

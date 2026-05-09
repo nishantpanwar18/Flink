@@ -1,10 +1,10 @@
-# PyFlink for stream processing
+# Stream Processing
 apache-flink>=1.18.0,<2.0.0
 
-# Kafka integration
+# Kafka
 kafka-python>=2.0.2
-python-snappy>=0.7.0
-# High-performance JSON serialization
+
+# Fast JSON serialization
 orjson>=3.9.0
 
 # Dashboard

@@ -1,0 +1,12 @@
+FROM apache/hive:3.1.3
+
+USER root
+
+# Copy Hadoop AWS jars to Hive classpath for S3A filesystem support
+RUN cp /opt/hadoop/share/hadoop/tools/lib/hadoop-aws-3.1.0.jar /opt/hive/lib/ && \
+    cp /opt/hadoop/share/hadoop/tools/lib/aws-java-sdk-bundle-1.11.271.jar /opt/hive/lib/
+
+# Copy S3A config to Hadoop config directory
+COPY lakehouse/conf/core-site.xml /opt/hadoop/etc/hadoop/core-site.xml
+
+USER hive
